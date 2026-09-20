@@ -58,7 +58,7 @@ src/
 ├── company/        # GET /api/company, GET /api/config, CompanyService
 ├── google/         # routes-client.service.ts (only place that calls Google)
 ├── common/         # exception filter, units formatter
-└── health/         # GET /healthz
+└── health/         # GET /health (NOT /healthz — Cloud Run reserves that path at the edge)
 ```
 
 Endpoints (contract is frozen once handed to frontend — see §6):
@@ -68,7 +68,7 @@ Endpoints (contract is frozen once handed to frontend — see §6):
 | GET | `/api/config` | Browser key for Maps JS |
 | GET | `/api/company` | Office name/address/coords |
 | POST | `/api/route` | `{lat,lng}` → distance/duration/polyline (see §6 for exact response shape) |
-| GET | `/healthz` | Cloud Run health check |
+| GET | `/health` | Cloud Run health check — path is `/health` not `/healthz` (Cloud Run's edge intercepts `/healthz` and returns 404 before hitting the container) |
 
 Validation uses global `ValidationPipe` with `whitelist: true, forbidNonWhitelisted: true`. Extra fields on `POST /api/route` must be rejected, not ignored.
 

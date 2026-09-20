@@ -62,7 +62,7 @@ Required keys:
 | `GET` | `/api/config` | Browser key for the Maps JS SDK |
 | `GET` | `/api/company` | Office name / address / coords |
 | `POST` | `/api/route` | `{ lat, lng }` → distance / duration / polyline |
-| `GET` | `/healthz` | App Runner health check |
+| `GET` | `/health` | Cloud Run health check (path is `/health` — Cloud Run reserves `/healthz` at the edge) |
 | `GET` | `/docs` | Swagger UI |
 
 `POST /api/route` uses a global `ValidationPipe` with `whitelist: true, forbidNonWhitelisted: true` — extra fields are rejected, not silently dropped. The response shape (frozen once handed to frontend) is defined in `requirement.md` §6.
@@ -91,7 +91,7 @@ src/
 ├── company/             # GET /api/company, GET /api/config, CompanyService
 ├── google/              # routes-client.service.ts — the only Google caller
 ├── common/              # exception filter, formatters, guards
-└── health/              # GET /healthz
+└── health/              # GET /health
 web/                     # Vite + TS frontend, built into web/dist/
 ```
 

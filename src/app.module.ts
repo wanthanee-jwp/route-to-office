@@ -37,7 +37,7 @@ import { RouteModule } from './route/route.module';
     // dev (`npm run start:dev`) and prod (`node dist/main` from /app).
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'web', 'dist'),
-      exclude: ['/api/{*path}', '/docs', '/docs/{*path}', '/healthz'],
+      exclude: ['/api/{*path}', '/docs', '/docs/{*path}', '/health'],
       serveStaticOptions: {
         // index.html for the SPA entry; other paths fall through to the
         // controllers or 404. No client-side routing to worry about.
