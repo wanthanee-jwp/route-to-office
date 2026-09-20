@@ -1,7 +1,15 @@
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import {
   GetSecretValueCommand,
   SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
+
+// Local dev reads secrets from this JSON file at the project root. The shape
+// matches the AWS Secrets Manager payload 1:1, so switching between modes is
+// literally just USE_AWS_SECRETS=true|false. Override the path with
+// SECRETS_FILE if you need a non-default location.
+const DEFAULT_SECRETS_FILE = 'route-to-office.json';
 
 // The keys held in Secrets Manager (requirement.md §5). Everything else — port,
 // TZ, FRONTEND_ORIGINS — comes from ordinary env vars and is not a secret.
@@ -15,25 +23,29 @@ export const SECRET_KEYS = [
 ] as const;
 
 // Optional keys — loaded and passed through to process.env when present, but
-// their absence does not fail startup. COMPANY_PLACE_ID improves routing
-// accuracy (Google can target the building entrance instead of a rooftop pin)
-// but the Routes call still works with lat/lng alone.
-export const OPTIONAL_SECRET_KEYS = ['COMPANY_PLACE_ID'] as const;
+// their absence does not fail startup.
+//   COMPANY_PLACE_ID: improves routing accuracy (Google can target the
+//     building entrance instead of a rooftop pin); the Routes call still
+//     works with lat/lng alone.
+//   FRONTEND_ORIGINS: convenience passthrough so route-to-office.json can act
+//     as a single local-config file. If absent from the payload, main.ts falls
+//     back to whatever is in .env / shell env.
+export const OPTIONAL_SECRET_KEYS = ['COMPANY_PLACE_ID', 'FRONTEND_ORIGINS'] as const;
 
 export type SecretKey = (typeof SECRET_KEYS)[number];
 export type OptionalSecretKey = (typeof OPTIONAL_SECRET_KEYS)[number];
 export type SecretValues = Record<SecretKey, string> &
   Partial<Record<OptionalSecretKey, string>>;
 
-// Loads secret values either from AWS Secrets Manager or from process.env
-// (populated from .env). This runs once during ConfigModule bootstrap; if it
-// throws, Nest never finishes starting and the container fails fast — which is
-// exactly what we want if a required key is missing.
+// Loads secret values either from AWS Secrets Manager or from the local
+// route-to-office.json file. This runs once during ConfigModule bootstrap; if
+// it throws, Nest never finishes starting and the container fails fast —
+// which is exactly what we want if a required key is missing.
 export async function loadSecrets(): Promise<SecretValues> {
   const useAws = (process.env.USE_AWS_SECRETS ?? '').toLowerCase() === 'true';
   const raw: Record<string, string | undefined> = useAws
     ? await fetchFromAws()
-    : { ...process.env };
+    : await fetchFromFile();
 
   const values = validate(raw);
   // Fold the resolved values back into process.env so @nestjs/config's
@@ -46,6 +58,39 @@ export async function loadSecrets(): Promise<SecretValues> {
     if (value !== undefined) process.env[key] = value;
   }
   return values;
+}
+
+async function fetchFromFile(): Promise<Record<string, string>> {
+  const path = resolve(process.cwd(), process.env.SECRETS_FILE ?? DEFAULT_SECRETS_FILE);
+  let contents: string;
+  try {
+    contents = await readFile(path, 'utf8');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      throw new Error(
+        `Secrets file not found at ${path}. Copy route-to-office.example.json to route-to-office.json (or set SECRETS_FILE).`,
+      );
+    }
+    throw new Error(`Failed to read secrets file ${path}: ${(err as Error).message}`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(contents);
+  } catch (err) {
+    throw new Error(`Secrets file ${path} is not valid JSON: ${(err as Error).message}`);
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`Secrets file ${path} must contain a JSON object`);
+  }
+
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (value === null || value === undefined) continue;
+    out[key] = typeof value === 'string' ? value : String(value);
+  }
+  return out;
 }
 
 async function fetchFromAws(): Promise<Record<string, string>> {

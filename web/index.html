@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>เส้นทางไปออฟฟิศ</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header id="header">
+      <h1 id="office-name">กำลังโหลด…</h1>
+      <p id="office-address"></p>
+    </header>
+
+    <main>
+      <div id="map"></div>
+      <aside id="panel">
+        <button id="locate-btn" type="button" disabled>ค้นหาเส้นทางจากตำแหน่งของฉัน</button>
+        <div id="status" role="status"></div>
+        <dl id="result" hidden>
+          <dt>ระยะทาง</dt><dd id="distance">—</dd>
+          <dt>เวลาเดินทาง</dt><dd id="duration">—</dd>
+          <dt>ปกติ (ไม่มีรถติด)</dt><dd id="static-duration">—</dd>
+        </dl>
+      </aside>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

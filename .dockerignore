@@ -1,11 +1,15 @@
 node_modules
+web/node_modules
 dist
+web/dist
 coverage
 .git
 .gitignore
 .env
 .env.*
 !.env.example
+route-to-office.json
+!route-to-office.example.json
 .vscode
 .idea
 *.log

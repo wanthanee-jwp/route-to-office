@@ -1,7 +1,9 @@
 import { CacheModule } from '@nestjs/cache-manager';
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { join } from 'node:path';
 import { CompanyModule } from './company/company.module';
 import { ConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
@@ -28,6 +30,21 @@ import { RouteModule } from './route/route.module';
     RouteModule,
     CompanyModule,
     HealthModule,
+
+    // Serve the built frontend (web/dist) at /. Excludes exist so /api/* and
+    // /docs still resolve through Nest controllers instead of returning
+    // index.html. rootPath is resolved from process.cwd() so it works in both
+    // dev (`npm run start:dev`) and prod (`node dist/main` from /app).
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'web', 'dist'),
+      exclude: ['/api/{*path}', '/docs', '/docs/{*path}', '/healthz'],
+      serveStaticOptions: {
+        // index.html for the SPA entry; other paths fall through to the
+        // controllers or 404. No client-side routing to worry about.
+        index: 'index.html',
+        fallthrough: true,
+      },
+    }),
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

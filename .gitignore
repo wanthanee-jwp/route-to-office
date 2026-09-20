@@ -4,11 +4,14 @@ node_modules/
 # Build output
 dist/
 build/
+web/dist/
 
 # Environment (secrets never committed)
 .env
 .env.local
 .env.*.local
+route-to-office.json
+!route-to-office.example.json
 
 # Editor / OS
 .DS_Store

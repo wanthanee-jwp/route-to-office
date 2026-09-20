@@ -19,6 +19,12 @@ const FIELD_MASK =
   'routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline';
 const TIMEOUT_MS = 8_000;
 
+// Routes API rejects departureTime == now as "must be set to a future time"
+// (the payload is already a few ms old by the time Google validates it).
+// A small offset covers request latency + minor clock skew between us and Google
+// while still meaning "leaving now" for live-traffic purposes.
+const DEPARTURE_LEAD_MS = 30_000;
+
 export interface LatLng {
   lat: number;
   lng: number;
@@ -69,7 +75,7 @@ export class RoutesClientService {
           },
       travelMode: 'DRIVE',
       routingPreference: 'TRAFFIC_AWARE_OPTIMAL',
-      departureTime: new Date().toISOString(),
+      departureTime: new Date(Date.now() + DEPARTURE_LEAD_MS).toISOString(),
     };
 
     let data: RoutesApiResponse;
