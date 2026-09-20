@@ -1,0 +1,40 @@
+# Cloud Build pipeline: BUILD-ONLY (no deploy).
+#
+# Fires on push to main. Produces an image tagged main-$SHORT_SHA and main.
+# Deploys are triggered separately by pushing a tag (cloudbuild.yaml) or by
+# running ./deploy.sh manually.
+
+substitutions:
+  _REGION: asia-southeast1
+  _REPO: route-to-office
+  _SERVICE: route-to-office-staging
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:main-$SHORT_SHA'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:main'
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:main-$SHORT_SHA'
+      - -t
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:main'
+      - .
+
+  - id: push-sha
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:main-$SHORT_SHA'
+
+  - id: push-main
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:main'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -91,8 +91,9 @@ async function fetchFromFile(): Promise<Record<string, string>> {
 }
 
 async function fetchFromGcp(): Promise<Record<string, string>> {
-  // On Cloud Run, GOOGLE_CLOUD_PROJECT is injected automatically; GCP_PROJECT_ID
-  // is the explicit override we honor first.
+  // Cloud Run does NOT inject GOOGLE_CLOUD_PROJECT (that's App Engine / Cloud
+  // Functions behavior). Deploy scripts must pass GCP_PROJECT_ID explicitly.
+  // GOOGLE_CLOUD_PROJECT is still honored as a fallback for other environments.
   const projectId = process.env.GCP_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJECT;
   const secretName = process.env.GCP_SECRET_NAME;
   const version = process.env.GCP_SECRET_VERSION ?? 'latest';

@@ -40,7 +40,7 @@ npm --prefix web run dev  # Vite dev server on :5173, calls API on :3000
 Secrets are loaded once at boot by `src/config/secrets.loader.ts`. Missing/invalid keys log the offending name and exit with code 1.
 
 - Default: read from `route-to-office.json` at the project root (copy `route-to-office.example.json`).
-- Set `USE_GCP_SECRETS=true` (plus `GCP_SECRET_NAME`, and `GCP_PROJECT_ID` when not running on Cloud Run) to switch to Google Cloud Secret Manager.
+- Set `USE_GCP_SECRETS=true`, `GCP_PROJECT_ID`, and `GCP_SECRET_NAME` to switch to Google Cloud Secret Manager. All three are required — Cloud Run does **not** inject `GOOGLE_CLOUD_PROJECT` automatically (that's App Engine / Cloud Functions behavior), so `GCP_PROJECT_ID` must be passed explicitly via `--set-env-vars`.
 
 Required keys:
 
@@ -158,7 +158,7 @@ gcloud run deploy route-to-office-$ENV \
   --allow-unauthenticated \
   --min-instances=1 --max-instances=1 \
   --cpu=1 --memory=512Mi --port=8080 --timeout=30s \
-  --set-env-vars=USE_GCP_SECRETS=true,GCP_SECRET_NAME=route-to-office-$ENV,TZ=Asia/Bangkok,FRONTEND_ORIGINS=https://your-frontend.example.com
+  --set-env-vars=USE_GCP_SECRETS=true,GCP_PROJECT_ID=$PROJECT_ID,GCP_SECRET_NAME=route-to-office-$ENV,TZ=Asia/Bangkok,FRONTEND_ORIGINS=https://your-frontend.example.com
 ```
 
 ### Cloud Run gotchas

@@ -1,10 +1,9 @@
-# Cloud Build pipeline: build image, push to Artifact Registry, deploy to Cloud Run.
+# Cloud Build pipeline: BUILD + DEPLOY.
 #
-# Trigger it manually:
-#   gcloud builds submit --config cloudbuild.yaml \
-#     --substitutions=_SERVICE=route-to-office-staging,_SECRET_NAME=route-to-office-staging,_RUNTIME_SA=route-to-office@$PROJECT_ID.iam.gserviceaccount.com,_FRONTEND_ORIGINS=https://staging.example.com
+# Fires on git tag push (e.g. v1.0.0 or staging-2026-09-20). Also runnable
+# manually via `gcloud builds submit --config cloudbuild.yaml --substitutions=...`.
 #
-# Or wire it to a GitHub trigger and let Cloud Build fire on push to main.
+# Image is tagged with $TAG_NAME so every deploy is traceable to a git tag.
 #
 # One-time setup per project:
 #   gcloud artifacts repositories create route-to-office --repository-format=docker --location=$_REGION
@@ -22,7 +21,7 @@ substitutions:
   _FRONTEND_ORIGINS: '' # e.g. https://route.example.com
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${TAG_NAME}'
 
 steps:
   - id: build
@@ -30,14 +29,14 @@ steps:
     args:
       - build
       - -t
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${TAG_NAME}'
       - .
 
   - id: push
     name: gcr.io/cloud-builders/docker
     args:
       - push
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${TAG_NAME}'
 
   - id: deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -46,7 +45,7 @@ steps:
       - run
       - deploy
       - '${_SERVICE}'
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:${TAG_NAME}
       - --region=${_REGION}
       - --platform=managed
       - --service-account=${_RUNTIME_SA}
@@ -57,7 +56,7 @@ steps:
       - --memory=512Mi
       - --port=8080
       - --timeout=30s
-      - --set-env-vars=USE_GCP_SECRETS=true,GCP_SECRET_NAME=${_SECRET_NAME},TZ=Asia/Bangkok,FRONTEND_ORIGINS=${_FRONTEND_ORIGINS}
+      - --set-env-vars=USE_GCP_SECRETS=true,GCP_PROJECT_ID=$PROJECT_ID,GCP_SECRET_NAME=${_SECRET_NAME},TZ=Asia/Bangkok,FRONTEND_ORIGINS=${_FRONTEND_ORIGINS}
 
 options:
   logging: CLOUD_LOGGING_ONLY
