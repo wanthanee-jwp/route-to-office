@@ -1,0 +1,26 @@
+# Files ignored by `gcloud builds submit` / `gcloud run deploy --source .`.
+# Mirrors .dockerignore so local artefacts and secrets never travel to Cloud Build.
+.gcloudignore
+.git
+.gitignore
+
+node_modules
+web/node_modules
+dist
+web/dist
+coverage
+
+.env
+.env.*
+!.env.example
+route-to-office.json
+!route-to-office.example.json
+
+.vscode
+.idea
+.DS_Store
+*.log
+
+README.md
+requirement.md
+CLAUDE.md

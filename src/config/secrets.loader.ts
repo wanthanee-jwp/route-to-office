@@ -1,17 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import {
-  GetSecretValueCommand,
-  SecretsManagerClient,
-} from '@aws-sdk/client-secrets-manager';
+import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 
 // Local dev reads secrets from this JSON file at the project root. The shape
-// matches the AWS Secrets Manager payload 1:1, so switching between modes is
-// literally just USE_AWS_SECRETS=true|false. Override the path with
+// matches the Google Secret Manager payload 1:1, so switching between modes is
+// literally just USE_GCP_SECRETS=true|false. Override the path with
 // SECRETS_FILE if you need a non-default location.
 const DEFAULT_SECRETS_FILE = 'route-to-office.json';
 
-// The keys held in Secrets Manager (requirement.md §5). Everything else — port,
+// The keys held in Secret Manager (requirement.md §5). Everything else — port,
 // TZ, FRONTEND_ORIGINS — comes from ordinary env vars and is not a secret.
 export const SECRET_KEYS = [
   'GOOGLE_MAPS_SERVER_KEY',
@@ -37,14 +34,14 @@ export type OptionalSecretKey = (typeof OPTIONAL_SECRET_KEYS)[number];
 export type SecretValues = Record<SecretKey, string> &
   Partial<Record<OptionalSecretKey, string>>;
 
-// Loads secret values either from AWS Secrets Manager or from the local
-// route-to-office.json file. This runs once during ConfigModule bootstrap; if
-// it throws, Nest never finishes starting and the container fails fast —
-// which is exactly what we want if a required key is missing.
+// Loads secret values either from Google Cloud Secret Manager or from the
+// local route-to-office.json file. This runs once during ConfigModule
+// bootstrap; if it throws, Nest never finishes starting and the container
+// fails fast — which is exactly what we want if a required key is missing.
 export async function loadSecrets(): Promise<SecretValues> {
-  const useAws = (process.env.USE_AWS_SECRETS ?? '').toLowerCase() === 'true';
-  const raw: Record<string, string | undefined> = useAws
-    ? await fetchFromAws()
+  const useGcp = (process.env.USE_GCP_SECRETS ?? '').toLowerCase() === 'true';
+  const raw: Record<string, string | undefined> = useGcp
+    ? await fetchFromGcp()
     : await fetchFromFile();
 
   const values = validate(raw);
@@ -93,33 +90,52 @@ async function fetchFromFile(): Promise<Record<string, string>> {
   return out;
 }
 
-async function fetchFromAws(): Promise<Record<string, string>> {
-  const region = process.env.AWS_REGION;
-  const secretId = process.env.AWS_SECRET_NAME;
-  if (!region) throw new Error('AWS_REGION must be set when USE_AWS_SECRETS=true');
-  if (!secretId) throw new Error('AWS_SECRET_NAME must be set when USE_AWS_SECRETS=true');
-
-  // 5s per attempt, 3 attempts total (requirement.md §7).
-  const client = new SecretsManagerClient({
-    region,
-    requestHandler: { requestTimeout: 5_000 },
-    maxAttempts: 3,
-  });
-
-  const res = await client.send(new GetSecretValueCommand({ SecretId: secretId }));
-  if (!res.SecretString) {
-    throw new Error(`Secret ${secretId} has no SecretString payload`);
+async function fetchFromGcp(): Promise<Record<string, string>> {
+  // On Cloud Run, GOOGLE_CLOUD_PROJECT is injected automatically; GCP_PROJECT_ID
+  // is the explicit override we honor first.
+  const projectId = process.env.GCP_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJECT;
+  const secretName = process.env.GCP_SECRET_NAME;
+  const version = process.env.GCP_SECRET_VERSION ?? 'latest';
+  if (!projectId) {
+    throw new Error(
+      'GCP_PROJECT_ID (or GOOGLE_CLOUD_PROJECT) must be set when USE_GCP_SECRETS=true',
+    );
   }
+  if (!secretName) {
+    throw new Error('GCP_SECRET_NAME must be set when USE_GCP_SECRETS=true');
+  }
+
+  // Uses Application Default Credentials — on Cloud Run this is the runtime
+  // service account attached to the service. Locally it's whatever
+  // `gcloud auth application-default login` set up.
+  const client = new SecretManagerServiceClient();
+  const resourceName = `projects/${projectId}/secrets/${secretName}/versions/${version}`;
+
+  const [response] = await client.accessSecretVersion({ name: resourceName });
+  const payload = response.payload?.data;
+  if (!payload) {
+    throw new Error(`Secret ${resourceName} has no payload`);
+  }
+  const decoded = Buffer.isBuffer(payload) ? payload.toString('utf8') : String(payload);
+
   let parsed: unknown;
   try {
-    parsed = JSON.parse(res.SecretString);
+    parsed = JSON.parse(decoded);
   } catch (err) {
-    throw new Error(`Secret ${secretId} is not valid JSON: ${(err as Error).message}`);
+    throw new Error(
+      `Secret ${resourceName} is not valid JSON: ${(err as Error).message}`,
+    );
   }
-  if (typeof parsed !== 'object' || parsed === null) {
-    throw new Error(`Secret ${secretId} did not decode to an object`);
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`Secret ${resourceName} did not decode to a JSON object`);
   }
-  return parsed as Record<string, string>;
+
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (value === null || value === undefined) continue;
+    out[key] = typeof value === 'string' ? value : String(value);
+  }
+  return out;
 }
 
 function validate(raw: Record<string, string | undefined>): SecretValues {
